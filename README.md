@@ -132,7 +132,7 @@ Other errors have no `code`, like a `422` for a commit that fails validation or 
 
 The app signs in the way an OAuth app does, with the authorization code flow and PKCE ([RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)), and /dev/null as the provider. The code it gets is bound to its key, so only the app that holds the key can redeem it.
 
-1. The app makes an ed25519 key and a random `code_verifier`, and opens this page in a browser session (`ASWebAuthenticationSession` on iOS):
+1. The app makes an ed25519 key and a random `code_verifier`, and opens this page in a browser session (`ASWebAuthenticationSession` on iOS, the system browser on a desktop):
 
    ```text
    https://dev-null.sh/mobile/authorize
@@ -144,7 +144,7 @@ The app signs in the way an OAuth app does, with the authorization code flow and
        &redirect_uri=devnull://auth/callback
    ```
 
-   `code_challenge` is `base64url(sha256(code_verifier))` without padding. `redirect_uri` has to start with `devnull://`. A guest signs in with GitHub first and comes back to the page. A request with a missing or bad parameter gets an error page and is never redirected.
+   `code_challenge` is `base64url(sha256(code_verifier))` without padding. `redirect_uri` is either the mobile app's own `devnull://` scheme, or, for any other native app such as a desktop app or a CLI, a loopback address it listens on, as [RFC 8252](https://www.rfc-editor.org/rfc/rfc8252#section-7.3) recommends: `http://127.0.0.1:<port>/…` or `http://[::1]:<port>/…`, with a port and no user or fragment (not `localhost`). Either way the code is bound to the key and the `code_verifier`, so another app that gets it can't redeem it. A guest signs in with GitHub first and comes back to the page. A request with a missing or bad parameter gets an error page and is never redirected.
 2. The page asks "Approve devnull on iPhone?", with the key's fingerprint and the account it signs in as. **Approve** redirects (`303`) to `devnull://auth/callback?code=…&state=af0ifjsldkj`. **Cancel** goes to `devnull://auth/callback?error=access_denied&state=af0ifjsldkj`. The app checks that `state` is the one it sent. A code is good for 5 minutes and only once, and each user can approve 10 times a minute.
 3. The app redeems the code with `POST /api/v1/devices`, signed with the key like any other request, though the key isn't approved yet:
 

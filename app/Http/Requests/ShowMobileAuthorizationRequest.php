@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Dto\MobileAuthorization;
+use App\Rules\DeviceRedirectUri;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -18,7 +19,7 @@ final class ShowMobileAuthorizationRequest extends FormRequest
     /**
      * The rules for what the app sends, on the page and again when the user approves it.
      *
-     * @return array<string, list<string>>
+     * @return array<string, list<string|DeviceRedirectUri>>
      */
     public static function parameterRules(): array
     {
@@ -31,7 +32,7 @@ final class ShowMobileAuthorizationRequest extends FormRequest
             'code_challenge' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{43}$/'],
             'code_challenge_method' => ['required', 'string', 'in:S256'],
             'state' => ['required', 'string', 'max:255'],
-            'redirect_uri' => ['required', 'string', 'max:255', 'starts_with:'.implode(',', $prefixes), 'not_regex:/#/'],
+            'redirect_uri' => ['required', 'string', 'max:255', new DeviceRedirectUri($prefixes), 'not_regex:/#/'],
         ];
     }
 
@@ -51,7 +52,7 @@ final class ShowMobileAuthorizationRequest extends FormRequest
     }
 
     /**
-     * @return array<string, list<string>>
+     * @return array<string, list<string|DeviceRedirectUri>>
      */
     public function rules(): array
     {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Requests;
 
 use App\Dto\MobileAuthorization;
+use App\Rules\DeviceRedirectUri;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -19,7 +20,7 @@ final class CreateMobileAuthorizationRequest extends FormRequest
     }
 
     /**
-     * @return array<string, list<string>>
+     * @return array<string, list<string|DeviceRedirectUri>>
      */
     public function rules(): array
     {

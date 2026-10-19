@@ -89,9 +89,25 @@ it('answers a request the app did not make right with a plain error page, and ne
     'a plain challenge' => [['code_challenge_method' => 'plain'], 'The selected code challenge method is invalid.'],
     'no state' => [['state' => null], 'The state field is required.'],
     'no redirect' => [['redirect_uri' => null], 'The redirect uri field is required.'],
-    'a redirect to a website' => [['redirect_uri' => 'https://evil.example/callback'], 'The redirect uri field must start with one of the following: devnull://.'],
-    'a redirect to another app' => [['redirect_uri' => 'otherapp://auth/callback'], 'The redirect uri field must start with one of the following: devnull://.'],
+    'a redirect to a website' => [['redirect_uri' => 'https://evil.example/callback'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
+    'a redirect to another app' => [['redirect_uri' => 'otherapp://auth/callback'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
     'a redirect with a fragment' => [['redirect_uri' => 'devnull://auth/callback#x'], 'The redirect uri field format is invalid.'],
+    'a loopback-looking redirect to a website' => [['redirect_uri' => 'http://127.0.0.1:80@evil.example/x'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
+    'a redirect to localhost' => [['redirect_uri' => 'http://localhost:1234/x'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
+    'a loopback redirect over https' => [['redirect_uri' => 'https://127.0.0.1:1/x'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
+    'a redirect to a host under 127.0.0.1' => [['redirect_uri' => 'http://127.0.0.1.evil.example/x'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
+    'a loopback redirect without a port' => [['redirect_uri' => 'http://127.0.0.1/x'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
+    'a loopback redirect with a fragment' => [['redirect_uri' => 'http://127.0.0.1:53682/x#y'], 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'],
+]);
+
+it('lets an app take the code on a loopback address it listens on', function (string $redirectUri): void {
+    $this->actingAs(User::factory()->create())
+        ->get(route('mobile-authorization.show', [...$this->parameters, 'redirect_uri' => $redirectUri]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page): Assert => $page->where('authorization.redirect_uri', $redirectUri));
+})->with([
+    'ipv4' => 'http://127.0.0.1:53682/callback',
+    'ipv6' => 'http://[::1]:53682/callback',
 ]);
 
 it('sends the app back with a one-time code and its state once the user approves it', function (): void {
@@ -116,6 +132,22 @@ it('sends the app back with a one-time code and its state once the user approves
     ]);
 });
 
+it('sends an app back to its loopback address with a one-time code and its state', function (): void {
+    $response = $this->actingAs(User::factory()->create())
+        ->post(route('mobile-authorization.store'), [...$this->parameters, 'redirect_uri' => 'http://127.0.0.1:53682/callback']);
+
+    $response->assertStatus(303);
+
+    $location = (string) $response->headers->get('Location');
+    parse_str((string) parse_url($location, PHP_URL_QUERY), $query);
+
+    expect($location)->toStartWith('http://127.0.0.1:53682/callback?code=')
+        ->and($query['state'])->toBe('af0ifjsldkj')
+        ->and($query['code'])->toBeString();
+
+    expect($this->codesHandedOut)->toBe(1);
+});
+
 it('keeps the query a redirect already has', function (): void {
     $response = $this->actingAs(User::factory()->create())
         ->post(route('mobile-authorization.store'), [...$this->parameters, 'redirect_uri' => 'devnull://auth/callback?app=1']);
@@ -129,7 +161,7 @@ it('approves nothing the app did not ask for right', function (): void {
         ->post(route('mobile-authorization.store'), [...$this->parameters, 'redirect_uri' => 'https://evil.example/callback']);
 
     $response->assertBadRequest()
-        ->assertInertia(fn (Assert $page): Assert => $page->where('error', 'The redirect uri field must start with one of the following: devnull://.'));
+        ->assertInertia(fn (Assert $page): Assert => $page->where('error', 'The redirect uri field must start with devnull://, or be a loopback URL like http://127.0.0.1:<port>/.'));
 
     expect($this->codesHandedOut)->toBe(0);
 });
